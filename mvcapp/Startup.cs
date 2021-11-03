@@ -28,13 +28,9 @@ namespace mvcapp
 {
     public class Startup
     {
-       // TracerProviderBuilder tracerProviderBuilder = Sdk.CreateTracerProviderBuilder().AddXRayTraceId(); // for generating AWS X-Ray compliant trace IDs
-
         public Startup(IConfiguration configuration)
         {
             Configuration = configuration;
-          //  Sdk.SetDefaultTextMapPropagator(new AWSXRayPropagator()); // configure AWS X-Ray propagator
-
         }
 
         public IConfiguration Configuration { get; }
@@ -45,6 +41,7 @@ namespace mvcapp
             services.AddControllersWithViews();
             services.AddOptions();
             services.AddLogging();
+            services.AddHealthChecks();
 
             AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
 
@@ -91,6 +88,10 @@ namespace mvcapp
                     pattern: "{controller=Home}/{action=Index}/{id?}");
                 endpoints.MapMetrics();
             });
+            
+            app.UseHealthChecks("/health");
+
+            
         }
     }
 }

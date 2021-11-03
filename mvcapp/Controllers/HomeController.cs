@@ -7,15 +7,18 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Threading.Tasks;
-using System.Diagnostics;
-
-
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
-
 using System.Net.Http;
-using System.Configuration;
+using System.Security.Cryptography;
+using System.Text.Json;
+using System.Threading.Tasks;
+using Amazon;
+using Amazon.Runtime;
+using Amazon.Runtime.CredentialManagement;
+using Amazon.Runtime.Documents;
+using Microsoft.AspNetCore.Http;
+
 
 
 namespace mvcapp.Controllers
@@ -26,18 +29,32 @@ namespace mvcapp.Controllers
         private readonly IConfiguration _config;
         private readonly HttpClient httpClient = new HttpClient();
 
-        AmazonDynamoDBClient client = new AmazonDynamoDBClient();
-        
+        private AmazonDynamoDBClient _client;
 
         private static readonly Counter TickTock =
-       Metrics.CreateCounter("sampleapp_ticks_total", "Just keeps on ticking");
+            Metrics.CreateCounter("sampleapp_ticks_total", "Just keeps on ticking");
 
-  
-        public HomeController(ILogger<HomeController> logger, IConfiguration config )
+        private static readonly Gauge apiResponse =
+            Metrics.CreateGauge("api_response", "Keeps track of the api response time");
+        
+        public HomeController(ILogger<HomeController> logger, IConfiguration config)
         {
             _logger = logger;
             _config = config;
+
+            AWSCredentials _awsCredentials;
+
+            if (new CredentialProfileStoreChain().TryGetAWSCredentials("ijaganna+playground1-Admin-OneClick",
+                out _awsCredentials))
+            {
+                _client = new AmazonDynamoDBClient(_awsCredentials, RegionEndpoint.USEast2);
+            }
+            else
+            {
+                _client = new AmazonDynamoDBClient(RegionEndpoint.USEast2);
+            }
         }
+
 
         public IActionResult Index()
         {
@@ -47,53 +64,55 @@ namespace mvcapp.Controllers
 
         public IActionResult InvokeAPI()
         {
+
             _logger.LogInformation($"{GetTraceId()}Hello from InvokeAPI");
             _logger.LogError($"{GetTraceId()}Some error :(");
-
-            string apigw_url;
-
-            apigw_url = Environment.GetEnvironmentVariable("APIGW_URL");
+            
+            string apigw_url = Environment.GetEnvironmentVariable("APIGW_URL");
+            
+            _logger.LogInformation($"APIGW URL : {apigw_url}");
 
             if (apigw_url == null)
                 apigw_url = _config.GetValue<string>("APIGW_URL");
 
+
+            var timeBeforeCall = DateTime.Now;
+            
+            if (new Random().Next(0, 6) > 3)
+            {
+                Task.Delay(3000);
+                _logger.LogWarning("${GetTraceId()}Something is slowing down your API response.");
+            }
+
             var result = httpClient.GetAsync(apigw_url).Result;
+            
+            var latency = DateTime.Now - timeBeforeCall;
+            
+            apiResponse.Set(latency.TotalMilliseconds);
 
             ViewData["apiresponse"] = result.Content.ReadAsStringAsync().Result;
             return View();
         }
 
-        public IActionResult Privacy()
+        public IActionResult Groceries(string q="Apple")
         {
-            Console.Write(Activity.Current.TraceId.ToHexString());
-
-           // AmazonDynamoDBClient client = new AmazonDynamoDBClient();
-
             var request = new QueryRequest
             {
                 TableName = "grocery",
                 KeyConditionExpression = "item_type = :v_type",
-                ExpressionAttributeValues = new Dictionary<string, AttributeValue> {
-                    {":v_type", new AttributeValue { S =  "Apple" }}}
+                ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                {
+                    {":v_type", new AttributeValue {S = q}}
+                }
             };
 
-            var response = client.QueryAsync(request).Result;
-
-            foreach (Dictionary<string, AttributeValue> item in response.Items)
-            {
-                // Process the result.
-                Console.WriteLine(item);
-            }
-
-
-            return View();
-
+            return View(_client.QueryAsync(request).Result);
         }
 
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
         public IActionResult Error()
         {
-            return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+            return View(new ErrorViewModel {RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier});
         }
 
         private string GetTraceId()
