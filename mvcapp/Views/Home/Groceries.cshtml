@@ -1,0 +1,30 @@
+﻿@{
+    ViewData["Title"] = "Groceries";
+
+}
+
+@model Amazon.DynamoDBv2.Model.QueryResponse
+
+
+<h1>@ViewData["Title"]</h1>
+
+<table class="table-bordered">
+
+    <tr class="table-primary">
+        @foreach (var ddbValue in @Model.Items.First().Keys)
+        {
+            <td>@ddbValue.ToString()</td>
+        }
+    </tr>
+
+    @foreach (var item in Model.Items)
+    {
+        <tr>
+            @foreach (var ddbValue in item.Values)
+            {
+                <td>@ddbValue.S</td>
+            }
+        </tr>
+    }
+
+</table>
