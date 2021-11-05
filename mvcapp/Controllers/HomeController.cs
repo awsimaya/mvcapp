@@ -20,7 +20,6 @@ using Amazon.Runtime.Documents;
 using Microsoft.AspNetCore.Http;
 
 
-
 namespace mvcapp.Controllers
 {
     public class HomeController : Controller
@@ -36,7 +35,7 @@ namespace mvcapp.Controllers
 
         private static readonly Gauge apiResponse =
             Metrics.CreateGauge("api_response", "Keeps track of the api response time");
-        
+
         public HomeController(ILogger<HomeController> logger, IConfiguration config)
         {
             _logger = logger;
@@ -64,37 +63,37 @@ namespace mvcapp.Controllers
 
         public IActionResult InvokeAPI()
         {
-
             _logger.LogInformation($"{GetTraceId()}Hello from InvokeAPI");
-            _logger.LogError($"{GetTraceId()}Some error :(");
-            
+
+
             string apigw_url = Environment.GetEnvironmentVariable("APIGW_URL");
-            
-            _logger.LogInformation($"APIGW URL : {apigw_url}");
 
             if (apigw_url == null)
                 apigw_url = _config.GetValue<string>("APIGW_URL");
 
+            _logger.LogInformation($"APIGW URL : {apigw_url}");
 
             var timeBeforeCall = DateTime.Now;
-            
-            if (new Random().Next(0, 6) > 3)
-            {
-                Task.Delay(3000);
-                _logger.LogWarning("${GetTraceId()}Something is slowing down your API response.");
-            }
+
+            // if (new Random().Next(0, 6) > 3)
+            // {
+            //     Task.Delay(3000);
+            //     _logger.LogWarning($"{GetTraceId()} Something is slowing down your API response.");
+            // }
 
             var result = httpClient.GetAsync(apigw_url).Result;
-            
+
             var latency = DateTime.Now - timeBeforeCall;
-            
+
             apiResponse.Set(latency.TotalMilliseconds);
 
             ViewData["apiresponse"] = result.Content.ReadAsStringAsync().Result;
+            ViewData["apiResponseTime"] = latency.TotalMilliseconds;
+            
             return View();
         }
 
-        public IActionResult Groceries(string q="Apple")
+        public IActionResult Groceries(string q = "Apple")
         {
             var request = new QueryRequest
             {
@@ -106,7 +105,19 @@ namespace mvcapp.Controllers
                 }
             };
 
-            return View(_client.QueryAsync(request).Result);
+            var result = _client.QueryAsync(request).Result;
+
+            try
+            {
+                _logger.LogInformation($"{GetTraceId()} Number of keys present - {result.Items.First().Keys.Count}"); 
+            }
+            catch (Exception e)
+            {
+                _logger.LogError($"{GetTraceId()} - {e.Message} - {e.StackTrace}"); 
+
+                throw;
+            }
+            return View(result);
         }
 
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]

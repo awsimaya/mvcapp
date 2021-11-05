@@ -46,7 +46,7 @@ namespace mvcapp
             AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
 
             Sdk.CreateTracerProviderBuilder()
-                .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("reinvent-app").AddTelemetrySdk())
+                .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("mvcapp").AddTelemetrySdk())
                 .AddXRayTraceId()
                 .AddAWSInstrumentation()
                 .AddHttpClientInstrumentation()
